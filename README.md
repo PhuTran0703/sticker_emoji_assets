@@ -37,6 +37,9 @@ truth for each pack's sticker count.
 1. Put the source images (white background) in a folder.
 2. `pip install -r tools/requirements.txt`
 3. `python tools/remove_bg.py <source_dir> stickers/<category>/<pack_id>`
+   — check the output; for white art that touches the background with no
+   outline (e.g. snow on the ground), redo that file with
+   `--seal 12 --only 03.png`.
 4. Add the pack to `manifest.json` and push.
 
 Files are cached on device by path and never re-downloaded, so **don't

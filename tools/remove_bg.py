@@ -1,9 +1,13 @@
 """Remove the white background connected to the image border and export
 square transparent PNG stickers.
 
-usage: remove_bg.py <src_dir> <dst_dir> [size]
+usage: remove_bg.py <src_dir> <dst_dir> [--size 512] [--threshold 6] [--seal 0]
+
+White parts of the art that touch the border without an outline (snow on the
+ground, clouds) get eaten with the defaults. For those, pass --seal 12
+(px of gap to close in their faint edge); --threshold tunes how faint.
 """
-import sys
+import argparse
 from pathlib import Path
 
 import numpy as np
@@ -15,16 +19,25 @@ T_LO, T_HI = 12, 70  # soft-edge ramp on the outline ring
 RING = 2       # px around the background that gets a soft alpha
 
 
-def process(path: Path, size: int) -> Image.Image:
+def _border_fill(open_: np.ndarray) -> np.ndarray:
+    """The parts of [open_] connected to the image border."""
+    labels, _ = ndimage.label(open_)
+    border = np.unique(np.concatenate([
+        labels[0], labels[-1], labels[:, 0], labels[:, -1]]))
+    return np.isin(labels, border[border != 0])
+
+
+def process(path: Path, size: int, t_bg: float = 6, seal: int = 0) -> Image.Image:
     rgb = np.asarray(Image.open(path).convert("RGB")).astype(np.float32)
     dist = 255.0 - rgb.min(axis=2)  # 0 = pure white
 
-    cand = dist < T_BG
-    labels, _ = ndimage.label(cand)
-    border = np.unique(np.concatenate([
-        labels[0], labels[-1], labels[:, 0], labels[:, -1]]))
-    border = border[border != 0]
-    bg = np.isin(labels, border)
+    bg = _border_fill(dist < T_BG)
+    if seal:
+        # A stricter fill that can't leak through gaps in a faint edge keeps
+        # the white areas of the art behind it; grown back by [seal] so the
+        # halo along strong outlines still goes.
+        strict = ~ndimage.binary_dilation(dist >= t_bg, iterations=seal)
+        bg &= ndimage.binary_dilation(_border_fill(strict), iterations=seal)
 
     alpha = np.where(bg, 0.0, 1.0)
     ring = ndimage.binary_dilation(bg, iterations=RING) & ~bg
@@ -52,13 +65,23 @@ def process(path: Path, size: int) -> Image.Image:
 
 
 def main():
-    src, dst = Path(sys.argv[1]), Path(sys.argv[2])
-    size = int(sys.argv[3]) if len(sys.argv) > 3 else 512
+    ap = argparse.ArgumentParser()
+    ap.add_argument("src", type=Path)
+    ap.add_argument("dst", type=Path)
+    ap.add_argument("--size", type=int, default=512)
+    ap.add_argument("--threshold", type=float, default=6,
+                    help="edge strength that stops the --seal fill")
+    ap.add_argument("--seal", type=int, default=0)
+    ap.add_argument("--only", nargs="*", help="output names to (re)write, e.g. 03.png")
+    args = ap.parse_args()
+    src, dst = args.src, args.dst
     dst.mkdir(parents=True, exist_ok=True)
     files = sorted(p for p in src.iterdir() if p.suffix.lower() in {".png", ".jpg", ".jpeg"})
     for i, p in enumerate(files, 1):
         out = dst / f"{i:02d}.png"
-        process(p, size).save(out, optimize=True)
+        if args.only and out.name not in args.only:
+            continue
+        process(p, args.size, args.threshold, args.seal).save(out, optimize=True)
         print(p.name, "->", out.name)
 
 
