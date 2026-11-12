@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "packs": [
+    {
+      "id": "christmas_owl",
+      "category": "animals",
+      "name": "Christmas Owl",
+      "emoji": "🦉",
+      "path": "stickers/animals/christmas_owl",
+      "cover": "01.png",
+      "stickers": [
+        "01.png",
+        "02.png",
+        "03.png",
+        "04.png",
+        "05.png",
+        "06.png",
+        "07.png",
+        "08.png",
+        "09.png"
+      ]
+    }
+  ]
+}
